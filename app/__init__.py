@@ -1,0 +1,1 @@
+"""Agentic document search service."""

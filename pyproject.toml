@@ -1,0 +1,31 @@
+[project]
+name = "agentic-docsearch"
+version = "0.1.0"
+description = "LangGraph-powered document search API with MongoDB Atlas vector search"
+authors = [ { name = "Leafy Agent" } ]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pymongo",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv",
+    "langgraph",
+    "langchain",
+    "openai",
+    "langsmith",
+    "numpy",
+    "mongomock",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-q"

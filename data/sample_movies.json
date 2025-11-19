@@ -1,0 +1,20 @@
+[
+  {
+    "title": "The Data Whisperer",
+    "plot": "A gifted analyst uncovers a conspiracy by listening to anomalies in terabytes of telemetry.",
+    "genres": ["thriller", "sci-fi"],
+    "year": 2021
+  },
+  {
+    "title": "Vector Velocity",
+    "plot": "Two engineers build a document intelligence platform that saves their company from chaos.",
+    "genres": ["drama"],
+    "year": 2022
+  },
+  {
+    "title": "Atlas Rising",
+    "plot": "A team of SREs migrate their stack to MongoDB Atlas and unlock real-time insights.",
+    "genres": ["documentary"],
+    "year": 2020
+  }
+]
