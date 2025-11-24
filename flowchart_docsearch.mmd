@@ -12,7 +12,8 @@ flowchart TB
             ROUTER["router_agent\n- Routes search vs CRUD"]
             SESSION["session_memory_agent\n- Pull prior interactions\n- session_id scoped"]
             EMB["embedding_agent\n- Generate query embedding\n- OpenAI or fake"]
-            VS["vector_search_agent\n- MongoDB Atlas $vectorSearch\n- cosine fallback in mock mode"]
+            VS["vector_search_agent\n- MongoDB Atlas $vectorSearch\n- Hybrid: keyword/$match filters\n- Cosine fallback in mock mode"]
+            ANSWER["answer_agent\n- Summarize top docs\n- Cite retrieved titles/snippets"]
             MEMWRITE["memory_write_agent\n- Persist interaction history"]
             CRUD["crud_agent\n- create/read/update/delete\n- recompute embeddings on content change"]
         end
@@ -24,11 +25,12 @@ flowchart TB
     subgraph ETL["Data & Ingestion"]
         INGEST["scripts/ingest_movies.py\n- Load sample_movies.json\n- Build title+plot text"]
         EMBED["Embeddings\n- embed_text()\n- model=text-embedding-3-small\n- fake mode for tests"]
+        BACKFILL["scripts/backfill_embeddings.py\n- Embed existing movies (title+plot)\n- Populate missing embeddings"]
     end
 
     subgraph DB["MongoDB Atlas (or mongomock)"]
-        DOCS["kb_documents collection\n- title, content, tags, metadata\n- embedding vector field\n- created_at / updated_at\n(Vector Search index on embedding)"]
-        SESS["kb_documents_sessions collection\n- session_id\n- interactions[] {query, result_ids, timestamp}"]
+        DOCS["sample_mflix.movies collection\n- title, content/plot, genres/tags, metadata\n- embedding vector field\n- created_at / updated_at\n(Vector Search index: kb_documents_vs_idx)"]
+        SESS["movies_sessions collection\n- session_id\n- interactions[] {query, result_ids, timestamp}"]
     end
 
     subgraph EVALS["Evaluations & Monitoring"]
@@ -40,7 +42,7 @@ flowchart TB
     USER --> API
     API --> ROUTER
 
-    ROUTER -->|operation: search| SESSION --> EMB --> VS --> MEMWRITE --> API
+    ROUTER -->|operation: search| SESSION --> EMB --> VS --> ANSWER --> MEMWRITE --> API
     ROUTER -->|operation: CRUD| CRUD --> API
 
     VS --> DOCS
@@ -53,6 +55,7 @@ flowchart TB
 
     %% Ingestion path
     INGEST --> EMBED --> DOCS
+    BACKFILL --> DOCS
 
     %% Tests stay local
     TESTS --> API
