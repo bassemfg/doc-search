@@ -8,6 +8,7 @@ from uuid import uuid4
 from bson import json_util
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from datetime import datetime
 
 from .agents import GRAPH
 from .config import get_settings
@@ -44,6 +45,13 @@ def _bson_to_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
     return data
 
 
+def _normalize_ts(value: Any) -> Any:
+    """Convert datetimes to ISO strings for JSON-friendly responses."""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
 def _documents_from_results(docs: List[Dict[str, Any]]) -> List[DocumentOut]:
     converted: List[DocumentOut] = []
     for doc in docs:
@@ -64,8 +72,8 @@ def _documents_from_results(docs: List[Dict[str, Any]]) -> List[DocumentOut]:
                     "tags": doc.get("tags", []),
                     "source": doc.get("source"),
                     "metadata": doc.get("metadata", {}),
-                    "created_at": doc.get("created_at"),
-                    "updated_at": doc.get("updated_at"),
+                    "created_at": _normalize_ts(doc.get("created_at")),
+                    "updated_at": _normalize_ts(doc.get("updated_at")),
                     "score": doc.get("score"),
                 }
             )
@@ -138,6 +146,8 @@ def create_document(body: DocumentIn) -> CRUDResponse:
         )
         raise HTTPException(status_code=400, detail=state["error"])
     doc = _bson_to_dict(state["crud_result"])
+    doc["created_at"] = _normalize_ts(doc.get("created_at"))
+    doc["updated_at"] = _normalize_ts(doc.get("updated_at"))
     if "_id" in doc:
         doc["_id"] = str(doc["_id"])
     response = CRUDResponse(success=True, data=doc)
@@ -158,6 +168,8 @@ def read_document(doc_id: str) -> CRUDResponse:
         )
         raise HTTPException(status_code=404, detail=state["error"])
     doc = _bson_to_dict(state["crud_result"])
+    doc["created_at"] = _normalize_ts(doc.get("created_at"))
+    doc["updated_at"] = _normalize_ts(doc.get("updated_at"))
     if "_id" in doc:
         doc["_id"] = str(doc["_id"])
     response = CRUDResponse(success=True, data=doc)
@@ -185,6 +197,8 @@ def update_document(doc_id: str, body: DocumentUpdate) -> CRUDResponse:
         )
         raise HTTPException(status_code=400, detail=state["error"])
     doc = _bson_to_dict(state["crud_result"])
+    doc["created_at"] = _normalize_ts(doc.get("created_at"))
+    doc["updated_at"] = _normalize_ts(doc.get("updated_at"))
     if "_id" in doc:
         doc["_id"] = str(doc["_id"])
     response = CRUDResponse(success=True, data=doc)
