@@ -10,9 +10,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    mongodb_uri: str = Field(default="mongodb://localhost:27017")
-    mongodb_db_name: str = Field(default="agentic_docsearch")
-    mongodb_collection_name: str = Field(default="kb_documents")
+    mongodb_uri: str = Field(default="mongodb+srv://<user>:<password>@<cluster>/?retryWrites=true&w=majority")
+    mongodb_db_name: str = Field(default="sample_mflix")
+    mongodb_collection_name: str = Field(default="movies")
     mongodb_vector_index_name: str = Field(default="kb_documents_vs_idx")
 
     use_mock_db: bool = Field(default=False)

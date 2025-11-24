@@ -13,6 +13,7 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
   - `crud_agent` owns create/read/update/delete flows and keeps embeddings in sync.
 - **FastAPI surface** (`app/main.py`) is intentionally thin – each endpoint just builds the initial graph state and hands off to LangGraph.
 - **MongoDB Atlas Vector Search** stores both the canonical document and its embedding in a single collection. Session traces are stored in a sibling collection.
+- **Atlas defaults** target the sample dataset (`sample_mflix.movies`) with a `kb_documents_vs_idx` vector index on the `embedding` field.
 - **Observability + evaluations** (`app/monitoring.py`, `scripts/run_evals.py`) emit LangSmith traces/runs if the environment is configured.
 - **Sample data + ingestion** (`data/sample_movies.json`, `scripts/ingest_movies.py`) provide a turnkey dataset to demo the full workflow.
 - **Automated tests** (`tests/test_api.py`) run against an in-memory Mongo mock + deterministic embeddings for reproducibility.
@@ -28,9 +29,9 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
    ```bash
    cp .env.example .env
    ```
-   Fill in MongoDB Atlas + OpenAI credentials. Set `USE_MOCK_DB=true` and/or `USE_FAKE_EMBEDDINGS=true` for offline development / testing.
+   Set `MONGODB_URI` to your Atlas SRV connection string (user/password based; do **not** paste Data API keys into the URI). Defaults point to `sample_mflix.movies` with vector index `kb_documents_vs_idx`. Set `USE_MOCK_DB=true` and/or `USE_FAKE_EMBEDDINGS=true` for offline development/testing.
 
-3. **Create the Atlas vector index** (once per collection):
+3. **Create the Atlas vector index** on your Atlas cluster (collection: `sample_mflix.movies`, field: `embedding`):
    ```json
    {
      "name": "kb_documents_vs_idx",
@@ -40,17 +41,36 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
          {
            "type": "vector",
            "path": "embedding",
-           "numDimensions": 1536,
+           "numDimensions": 1536, // text-embedding-3-small output size
            "similarity": "cosine"
          }
        ]
      }
    }
    ```
+   The corresponding aggregation used by the service:
+   ```javascript
+   db.movies.aggregate([
+     {
+       $vectorSearch: {
+         index: "kb_documents_vs_idx",
+         path: "embedding",
+         queryVector: [<array-of-numbers>],
+         numCandidates: <number-of-candidates>,
+         limit: <number-of-results>
+       }
+     }
+   ])
+   ```
 
 4. **Ingest sample data (optional)**
    ```bash
    python scripts/ingest_movies.py
+   ```
+
+5. **Run a quick vector search smoke test (Atlas only)**
+   ```bash
+   python scripts/vector_search_example.py
    ```
 
 5. **Run the API**
