@@ -149,3 +149,13 @@ tests/
 - Add a summariser/answer agent that cites retrieved docs.
 - Layer hybrid retrieval (keyword + vector) by extending `vector_search_agent` with `$match` filters.
 - Promote session history into a standalone analytics dashboard using Atlas Charts or MongoDB Stream Processing.
+
+## Deployment (AWS-focused)
+
+- **Containerize & Orchestrate**: Package the service with Docker and deploy on Amazon ECS (Fargate) or EKS. Use a load balancer (ALB) in front of multiple tasks/pods to scale horizontally. Configure auto-scaling on CPU/RPS and set pod disruption budgets for reliability.
+- **Config & Secrets**: Store `MONGODB_URI`, `OPENAI_API_KEY`, and LangSmith tokens in AWS Secrets Manager or SSM Parameter Store. Inject at runtime via task definitions or Kubernetes secrets; avoid shipping secrets in images or source.
+- **Network & Security**: Place services in private subnets; egress via NAT to Atlas. Restrict Atlas IP allowlist to NAT/egress IPs; enforce TLS. Use security groups and IAM roles for service accounts (IRSA on EKS) to scope AWS access. Enable FastAPI CORS only for trusted origins.
+- **Reliability**: Run >1 replica; enable health checks on `/health`; configure graceful shutdown (SIGTERM) and timeouts. Use retries with backoff for outbound calls (OpenAI, Atlas) and set connection pools on MongoDB client.
+- **Performance**: Enable UVicorn workers tuned to vCPU count; set `numCandidates`/`limit` sensibly for vector search. Consider response compression and request body limits. Monitor p99 latency via CloudWatch or your APM; profile hot paths before scaling up instance sizes.
+- **Cost Optimization**: Start with Atlas M0/M10 for dev, size up only if QPS demands. Use ARM Graviton on Fargate/EKS where supported. Tune `numCandidates` to reduce compute per query; cache frequent queries if patterns emerge. Stop idle dev environments on schedule.
+- **Observability**: Forward logs to CloudWatch; emit LangSmith traces for workflow visibility. Add metrics (request rate, error rate, latency, embedding call volume) and alerts on SLOs. Optionally add distributed tracing (OpenTelemetry) for end-to-end visibility.
