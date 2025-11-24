@@ -1,0 +1,58 @@
+flowchart TB
+    %% ========= LAYER 1: EXPERIENCE =========
+    subgraph CLIENT["Experience Layer – API Consumer"]
+        USER["Client / Internal Service\n- Sends REST calls\n- Consumes JSON results"]
+    end
+
+    %% ========= LAYER 2: AGENTIC ORCHESTRATION =========
+    subgraph AGENTS["Agentic Layer – FastAPI + LangGraph (app/main.py, app/agents.py)"]
+        API["FastAPI Endpoints\n- POST /search\n- CRUD: /documents\n- /health"]
+
+        subgraph GRAPH["LangGraph Workflow (shared state dict)"]
+            ROUTER["router_agent\n- Routes search vs CRUD"]
+            SESSION["session_memory_agent\n- Pull prior interactions\n- session_id scoped"]
+            EMB["embedding_agent\n- Generate query embedding\n- OpenAI or fake"]
+            VS["vector_search_agent\n- MongoDB Atlas $vectorSearch\n- cosine fallback in mock mode"]
+            MEMWRITE["memory_write_agent\n- Persist interaction history"]
+            CRUD["crud_agent\n- create/read/update/delete\n- recompute embeddings on content change"]
+        end
+
+        OBS["Observability\n- LangSmith RunTree traces\n- Inputs/outputs/errors per call"]
+    end
+
+    %% ========= LAYER 3: DATA & INGESTION =========
+    subgraph ETL["Data & Ingestion"]
+        INGEST["scripts/ingest_movies.py\n- Load sample_movies.json\n- Build title+plot text"]
+        EMBED["Embeddings\n- embed_text()\n- model=text-embedding-3-small\n- fake mode for tests"]
+    end
+
+    subgraph DB["MongoDB Atlas (or mongomock)"]
+        DOCS["kb_documents collection\n- title, content, tags, metadata\n- embedding vector field\n- created_at / updated_at\n(Vector Search index on embedding)"]
+        SESS["kb_documents_sessions collection\n- session_id\n- interactions[] {query, result_ids, timestamp}"]
+    end
+
+    subgraph EVALS["Evaluations & Monitoring"]
+        RUN_EVALS["scripts/run_evals.py\n- Replay curated queries\n- Compute accuracy\n- Log evaluation events"]
+        TESTS["tests/test_api.py\n- CRUD + semantic search regression\n- Uses mock DB + fake embeddings"]
+    end
+
+    %% ========= CONNECTIONS =========
+    USER --> API
+    API --> ROUTER
+
+    ROUTER -->|operation: search| SESSION --> EMB --> VS --> MEMWRITE --> API
+    ROUTER -->|operation: CRUD| CRUD --> API
+
+    VS --> DOCS
+    CRUD --> DOCS
+    MEMWRITE --> SESS
+    SESSION --> SESS
+
+    API --> OBS
+    RUN_EVALS --> OBS
+
+    %% Ingestion path
+    INGEST --> EMBED --> DOCS
+
+    %% Tests stay local
+    TESTS --> API
