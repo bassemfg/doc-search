@@ -27,6 +27,8 @@ class SearchState(TypedDict, total=False):
     query: Optional[str]
     top_k: int
     session_id: Optional[str]
+    keyword: Optional[str]
+    filters: Optional[Dict[str, Any]]
     document_in: Optional[Dict[str, Any]]
     document_update: Optional[Dict[str, Any]]
     doc_id: Optional[str]
@@ -35,6 +37,7 @@ class SearchState(TypedDict, total=False):
     # Outputs written by agents.
     results: Optional[List[Dict[str, Any]]]
     crud_result: Optional[Dict[str, Any]]
+    answer: Optional[str]
     history: List[Dict[str, Any]]
     error: Optional[str]
 
@@ -113,23 +116,63 @@ def vector_search_agent(state: SearchState) -> SearchState:
                 "numCandidates": settings.num_candidates,
                 "limit": top_k,
             }
-        },
+        }
+    ]
+
+    # Hybrid filter: optional keyword regex + caller-provided filters after vector similarity.
+    match_filters: Dict[str, Any] = {}
+    keyword = state.get("keyword")
+    if keyword:
+        match_filters.setdefault("$or", []).extend(
+            [
+                {"title": {"$regex": keyword, "$options": "i"}},
+                {"content": {"$regex": keyword, "$options": "i"}},
+                {"plot": {"$regex": keyword, "$options": "i"}},
+            ]
+        )
+    if state.get("filters"):
+        match_filters.update(state["filters"])
+
+    if match_filters:
+        pipeline.append({"$match": match_filters})
+
+    pipeline.append(
         {
             "$project": {
                 "title": 1,
                 "content": 1,
+                "plot": 1,
                 "tags": 1,
+                "genres": 1,
                 "source": 1,
                 "metadata": 1,
                 "created_at": 1,
                 "updated_at": 1,
                 "score": {"$meta": "vectorSearchScore"},
             }
-        },
-    ]
+        }
+    )
 
     docs = list(collection.aggregate(pipeline))
     return {"results": docs}
+
+
+def answer_agent(state: SearchState) -> SearchState:
+    # Light-weight summariser that cites retrieved docs (titles) without making an external LLM call.
+    docs = state.get("results", []) or []
+    if not docs:
+        return {"answer": "No documents found to answer this query."}
+
+    top_docs = docs[:3]
+    chunks = []
+    for doc in top_docs:
+        title = doc.get("title") or doc.get("metadata", {}).get("title", "(untitled)")
+        body = doc.get("content") or doc.get("plot") or ""
+        snippet = (body[:220] + "...") if len(body) > 220 else body
+        chunks.append(f"- {title}: {snippet}")
+
+    answer = "Here is a brief answer based on the top documents:\n" + "\n".join(chunks)
+    return {"answer": answer}
 
 
 def memory_write_agent(state: SearchState) -> SearchState:
@@ -230,6 +273,7 @@ def build_graph():
     graph.add_node("session_memory", session_memory_agent)
     graph.add_node("embedding_agent", embedding_agent)
     graph.add_node("vector_search_agent", vector_search_agent)
+    graph.add_node("answer_agent", answer_agent)
     graph.add_node("memory_write_agent", memory_write_agent)
     graph.add_node("crud_agent", crud_agent)
 
@@ -255,10 +299,11 @@ def build_graph():
         },
     )
 
-    # Search chain: load memory -> embed -> vector search -> log session, then terminate.
+    # Search chain: load memory -> embed -> vector search -> summarise -> log session, then terminate.
     graph.add_edge("session_memory", "embedding_agent")
     graph.add_edge("embedding_agent", "vector_search_agent")
-    graph.add_edge("vector_search_agent", "memory_write_agent")
+    graph.add_edge("vector_search_agent", "answer_agent")
+    graph.add_edge("answer_agent", "memory_write_agent")
     graph.add_edge("memory_write_agent", END)
     # CRUD chain: go straight to CRUD agent and terminate.
     graph.add_edge("crud_agent", END)

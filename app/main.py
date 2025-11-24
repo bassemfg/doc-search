@@ -72,6 +72,8 @@ def semantic_search(body: SearchRequest) -> SearchResponse:
         "query": body.query,
         "top_k": body.top_k or settings.default_top_k,
         "session_id": session_id,
+        "keyword": body.keyword,
+        "filters": body.filters,
     }
     state = GRAPH.invoke(initial_state)
 
@@ -89,7 +91,11 @@ def semantic_search(body: SearchRequest) -> SearchResponse:
         _bson_to_dict(doc)
         for doc in state.get("results", [])
     ]
-    response = SearchResponse(query=body.query, results=_documents_from_results(docs))
+    response = SearchResponse(
+        query=body.query,
+        answer=state.get("answer"),
+        results=_documents_from_results(docs),
+    )
     monitor.log_workflow_run(
         operation="search",
         inputs=initial_state,

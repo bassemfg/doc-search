@@ -56,10 +56,13 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
     session_id: Optional[str] = None
+    keyword: Optional[str] = None  # optional keyword filter for hybrid retrieval
+    filters: Optional[Dict[str, Any]] = None  # optional Mongo-style filters applied post vector search
 
 
 class SearchResponse(BaseModel):
     query: str
+    answer: Optional[str] = None
     results: List[DocumentOut]
 
 
