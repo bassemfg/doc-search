@@ -1,0 +1,22 @@
+Metadata-Version: 2.4
+Name: agentic-docsearch
+Version: 0.1.0
+Summary: LangGraph-powered document search API with MongoDB Atlas vector search
+Author: Leafy Agent
+Requires-Python: >=3.10
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: pymongo
+Requires-Dist: pydantic>=2.0
+Requires-Dist: pydantic-settings>=2.0
+Requires-Dist: python-dotenv
+Requires-Dist: langgraph
+Requires-Dist: langchain
+Requires-Dist: openai
+Requires-Dist: langsmith
+Requires-Dist: numpy
+Requires-Dist: mongomock
+Requires-Dist: httpx
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"

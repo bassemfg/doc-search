@@ -22,6 +22,7 @@ settings = get_settings()
 
 
 class SearchState(TypedDict, total=False):
+    # Operation and inputs provided by the caller/API.
     operation: Literal["search", "create", "read", "update", "delete"]
     query: Optional[str]
     top_k: int
@@ -29,7 +30,9 @@ class SearchState(TypedDict, total=False):
     document_in: Optional[Dict[str, Any]]
     document_update: Optional[Dict[str, Any]]
     doc_id: Optional[str]
+    # Intermediate values computed by agents.
     query_embedding: Optional[List[float]]
+    # Outputs written by agents.
     results: Optional[List[Dict[str, Any]]]
     crud_result: Optional[Dict[str, Any]]
     history: List[Dict[str, Any]]
@@ -68,6 +71,7 @@ def embedding_agent(state: SearchState) -> SearchState:
 
 
 def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
+    # Simple cosine similarity used only when running against the in-memory mock DB.
     if not vec_a or not vec_b:
         return 0.0
     length = min(len(vec_a), len(vec_b))
@@ -80,6 +84,7 @@ def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
 
 
 def vector_search_agent(state: SearchState) -> SearchState:
+    # Route to Atlas vector search (or in-memory cosine) using the query embedding.
     collection = get_collection()
     embedding = state.get("query_embedding")
     if not embedding:
@@ -88,6 +93,7 @@ def vector_search_agent(state: SearchState) -> SearchState:
     top_k = state.get("top_k", settings.default_top_k)
 
     if settings.use_mock_db:
+        # Local-only scoring when mongomock is used: compute cosine manually.
         docs = []
         for doc in collection.find({}):
             doc_embedding = doc.get("embedding") or []
@@ -127,6 +133,7 @@ def vector_search_agent(state: SearchState) -> SearchState:
 
 
 def memory_write_agent(state: SearchState) -> SearchState:
+    # Append a retrieval trace to the session collection so future turns can reuse history.
     session_id = state.get("session_id")
     if not session_id:
         return {}
@@ -149,6 +156,7 @@ def memory_write_agent(state: SearchState) -> SearchState:
 
 
 def crud_agent(state: SearchState) -> SearchState:
+    # CRUD handler keeps embeddings in sync on create/update and returns hydrated docs.
     collection = get_collection()
     op = state["operation"]
 
@@ -216,6 +224,7 @@ def crud_agent(state: SearchState) -> SearchState:
 
 
 def build_graph():
+    # Assemble the LangGraph: router -> search path (session -> embed -> search -> log) or CRUD path.
     graph = StateGraph(SearchState)
     graph.add_node("router", router_agent)
     graph.add_node("session_memory", session_memory_agent)
@@ -227,6 +236,7 @@ def build_graph():
     graph.set_entry_point("router")
 
     def route(state: SearchState) -> str:
+        # Minimal branching: semantic search goes through the embedding + vector path; everything else is CRUD.
         op = state.get("operation")
         if op == "search":
             return "search"
@@ -245,10 +255,12 @@ def build_graph():
         },
     )
 
+    # Search chain: load memory -> embed -> vector search -> log session, then terminate.
     graph.add_edge("session_memory", "embedding_agent")
     graph.add_edge("embedding_agent", "vector_search_agent")
     graph.add_edge("vector_search_agent", "memory_write_agent")
     graph.add_edge("memory_write_agent", END)
+    # CRUD chain: go straight to CRUD agent and terminate.
     graph.add_edge("crud_agent", END)
 
     return graph.compile()

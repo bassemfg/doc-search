@@ -73,6 +73,22 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
    python scripts/vector_search_example.py
    ```
 
+6. **Backfill embeddings for existing movies (Atlas sample data)**
+   The sample_mflix `movies` collection does not include embeddings by default. Backfill them so the vector index can serve all documents:
+   ```bash
+   python scripts/backfill_embeddings.py          # all docs without embeddings
+   # or limit the run if you want to test first
+   python scripts/backfill_embeddings.py 500
+   ```
+   Verify counts:
+   ```bash
+   python - <<'PY'
+   from app.db import get_collection
+   c = get_collection()
+   print("Docs with embedding:", c.count_documents({"embedding": {"$exists": True}}))
+   PY
+   ```
+
 5. **Run the API**
    ```bash
    uvicorn app.main:app --reload

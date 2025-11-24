@@ -65,7 +65,8 @@ class Observability:
             project_name=settings.langsmith_project,
         )
         run.end(outputs=_serialize(outputs), error=error)
-        run.post(client=self._client)
+        # Newer LangSmith SDK posts via the instance; client is optional if env/API key is set.
+        run.post()
 
     def log_evaluation(
         self,
@@ -73,7 +74,7 @@ class Observability:
         metrics: Dict[str, Any],
         examples: list[Dict[str, Any]],
     ) -> None:
-        if not self._client:
+        if not self._client or RunTree is None:
             return
         payload = {
             "dataset": dataset_name,
@@ -81,15 +82,16 @@ class Observability:
             "examples": [_serialize(ex) for ex in examples],
         }
         try:
-            self._client.log_event(
-                run={
-                    "name": f"evaluation::{dataset_name}",
-                    "run_type": "evaluation",
-                    "project_name": settings.langsmith_project,
-                    "inputs": {"dataset": dataset_name},
-                    "outputs": payload,
-                }
+            run = RunTree(
+                name=f"evaluation::{dataset_name}",
+                run_type="evaluation",
+                project_name=settings.langsmith_project,
+                inputs={"dataset": dataset_name},
+                tags=["evaluation"],
+                extra={"success": metrics.get("accuracy", None)},
             )
+            run.end(outputs=payload)
+            run.post()
         except Exception as exc:  # pragma: no cover
             logger.warning("Failed to log evaluation to LangSmith: %s", exc)
 

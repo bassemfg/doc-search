@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from app.config import get_settings
 from app.db import get_collection
 from app.embeddings import embed_text
@@ -10,7 +17,7 @@ settings = get_settings()
 
 
 def main() -> None:
-    query = "Fight Club"
+    query = "Snow White"
     embedding = embed_text(query)
     collection = get_collection()
 
