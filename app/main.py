@@ -31,16 +31,34 @@ app = FastAPI(
 
 
 def _bson_to_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
-    return json_util.loads(json_util.dumps(doc))
+    data = json_util.loads(json_util.dumps(doc))
+    if "_id" in data:
+        _id = data["_id"]
+        if isinstance(_id, dict) and "$oid" in _id:
+            data["_id"] = _id["$oid"]
+        else:
+            try:
+                data["_id"] = str(_id)
+            except Exception:
+                pass
+    return data
 
 
 def _documents_from_results(docs: List[Dict[str, Any]]) -> List[DocumentOut]:
     converted: List[DocumentOut] = []
     for doc in docs:
+        _id = doc.get("_id")
+        if isinstance(_id, dict) and "$oid" in _id:
+            _id = _id["$oid"]
+        elif _id is not None:
+            try:
+                _id = str(_id)
+            except Exception:
+                pass
         converted.append(
             DocumentOut(
                 **{
-                    "_id": doc.get("_id"),
+                    "_id": _id,
                     "title": doc.get("title", ""),
                     "content": doc.get("content", ""),
                     "tags": doc.get("tags", []),
@@ -120,6 +138,8 @@ def create_document(body: DocumentIn) -> CRUDResponse:
         )
         raise HTTPException(status_code=400, detail=state["error"])
     doc = _bson_to_dict(state["crud_result"])
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
     response = CRUDResponse(success=True, data=doc)
     monitor.log_workflow_run("create", inputs=payload, outputs=response.model_dump(), success=True)
     return response
@@ -138,6 +158,8 @@ def read_document(doc_id: str) -> CRUDResponse:
         )
         raise HTTPException(status_code=404, detail=state["error"])
     doc = _bson_to_dict(state["crud_result"])
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
     response = CRUDResponse(success=True, data=doc)
     monitor.log_workflow_run("read", inputs={"doc_id": doc_id}, outputs=response.model_dump(), success=True)
     return response
@@ -163,6 +185,8 @@ def update_document(doc_id: str, body: DocumentUpdate) -> CRUDResponse:
         )
         raise HTTPException(status_code=400, detail=state["error"])
     doc = _bson_to_dict(state["crud_result"])
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
     response = CRUDResponse(success=True, data=doc)
     monitor.log_workflow_run(
         "update",
@@ -191,5 +215,5 @@ def delete_document(doc_id: str) -> CRUDResponse:
 
 
 @app.exception_handler(Exception)
-def handle_exception(exc: Exception):  # pragma: no cover - FastAPI handles
+def handle_exception(request, exc: Exception):  # pragma: no cover - FastAPI handles
     return JSONResponse(status_code=500, content={"detail": str(exc)})
