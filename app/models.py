@@ -4,24 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from bson import ObjectId
 from pydantic import BaseModel, Field
-
-
-class PyObjectId(ObjectId):  # pragma: no cover - thin shim
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, value):
-        if isinstance(value, ObjectId):
-            return value
-        return ObjectId(str(value))
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, _schema):  # pragma: no cover
-        return {"type": "string"}
 
 
 class DocumentIn(BaseModel):
@@ -41,7 +24,7 @@ class DocumentUpdate(BaseModel):
 
 
 class DocumentOut(BaseModel):
-    id: PyObjectId = Field(alias="_id")
+    id: str = Field(alias="_id")
     title: str
     content: str
     tags: List[str] = Field(default_factory=list)
@@ -56,10 +39,13 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
     session_id: Optional[str] = None
+    keyword: Optional[str] = None  # optional keyword filter for hybrid retrieval
+    filters: Optional[Dict[str, Any]] = None  # optional Mongo-style filters applied post vector search
 
 
 class SearchResponse(BaseModel):
     query: str
+    answer: Optional[str] = None
     results: List[DocumentOut]
 
 

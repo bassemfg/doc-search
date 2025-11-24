@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from bson import json_util
@@ -38,6 +39,15 @@ class Observability:
         if not settings.langsmith_project:
             logger.debug("LangSmith project not configured, monitoring disabled")
             return
+
+        # Make sure the SDK sees the API key/project in env even if only .env is set.
+        if settings.langsmith_api_key:
+            os.environ.setdefault("LANGCHAIN_API_KEY", settings.langsmith_api_key)
+            os.environ.setdefault("LANGSMITH_API_KEY", settings.langsmith_api_key)
+        if settings.langsmith_project:
+            os.environ.setdefault("LANGCHAIN_PROJECT", settings.langsmith_project)
+            os.environ.setdefault("LANGSMITH_PROJECT", settings.langsmith_project)
+
         try:
             self._client = Client(api_key=settings.langsmith_api_key or None)
         except Exception as exc:  # pragma: no cover
@@ -82,9 +92,11 @@ class Observability:
             "examples": [_serialize(ex) for ex in examples],
         }
         try:
+            # LangSmith run types must be one of: tool/chain/llm/retriever/embedding/prompt/parser.
+            # Use "chain" for evaluations and tag accordingly.
             run = RunTree(
                 name=f"evaluation::{dataset_name}",
-                run_type="evaluation",
+                run_type="chain",
                 project_name=settings.langsmith_project,
                 inputs={"dataset": dataset_name},
                 tags=["evaluation"],

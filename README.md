@@ -8,7 +8,8 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
   - `router_agent` detects the requested operation.
   - `session_memory_agent` reads/maintains conversations per session.
   - `embedding_agent` calls the embedding provider (OpenAI by default, deterministic fake embeddings for tests/dev).
-  - `vector_search_agent` executes MongoDB Atlas `$vectorSearch` (with a cosine similarity fallback when using the mock DB).
+  - `vector_search_agent` executes MongoDB Atlas `$vectorSearch` (with a cosine similarity fallback in mock mode) and supports hybrid filters (`keyword` regex + arbitrary `$match` filters).
+  - `answer_agent` builds a lightweight summary that cites retrieved docs.
   - `memory_write_agent` persists interaction history for follow-up context.
   - `crud_agent` owns create/read/update/delete flows and keeps embeddings in sync.
 - **FastAPI surface** (`app/main.py`) is intentionally thin – each endpoint just builds the initial graph state and hands off to LangGraph.
@@ -108,7 +109,9 @@ Example search payload:
 {
   "query": "Vector search tutorial",
   "top_k": 5,
-  "session_id": "demo-session-123"
+  "session_id": "demo-session-123",
+  "keyword": "mongodb",
+  "filters": {"genres": "Drama"}
 }
 ```
 
@@ -119,6 +122,7 @@ Example search payload:
   export LANGSMITH_API_KEY=...
   export LANGSMITH_PROJECT=doc-search-observability
   export LANGSMITH_RUN_NAME=doc-search
+  # (the code will also mirror these into LANGCHAIN_API_KEY / LANGCHAIN_PROJECT for compatibility)
   ```
   Every API call is logged as a LangSmith run; offline evaluations (below) are recorded under the `evaluation::dataset` namespace.
 - **Offline eval harness** (`scripts/run_evals.py`) replays curated search cases and reports accuracy:
