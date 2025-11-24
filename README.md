@@ -90,7 +90,7 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
    PY
    ```
 
-5. **Run the API**
+7. **Run the API**
    ```bash
    uvicorn app.main:app --reload
    ```
@@ -101,7 +101,7 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
 - `GET /documents/{id}` – read
 - `PUT /documents/{id}` – update (partial)
 - `DELETE /documents/{id}` – delete
-- `POST /search` – semantic search, returns top-N docs with metadata + score and supports optional `session_id`
+- `POST /search` – semantic search (vector + optional hybrid keyword/$match filters), returns top-N docs with metadata + score + summary (`answer`) and supports optional `session_id`
 - `GET /health` – readiness probe
 
 Example search payload:
@@ -166,8 +166,8 @@ tests/
 
 ## Next Steps
 
-- Add a summariser/answer agent that cites retrieved docs.
-- Layer hybrid retrieval (keyword + vector) by extending `vector_search_agent` with `$match` filters.
+- Upgrade `answer_agent` to a full RAG LLM responder with citations and safety guardrails.
+- Add reranking (e.g., by `score` + keyword coverage) and expose `$meta` metadata in responses.
 - Promote session history into a standalone analytics dashboard using Atlas Charts or MongoDB Stream Processing.
 
 ## Deployment (AWS-focused)
