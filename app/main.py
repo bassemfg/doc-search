@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from bson import json_util
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from datetime import datetime
 from uuid import uuid4
@@ -30,6 +31,15 @@ app = FastAPI(
     title="Agentic Document Search API",
     description="LangGraph multi-agent workflow on top of MongoDB Atlas Vector Search",
     version="0.1.0",
+)
+
+# Allow local UI/file-based access during development.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

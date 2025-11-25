@@ -168,6 +168,8 @@
     const baseUrlEl = document.getElementById('baseUrl');
     const sessionEl = document.getElementById('sessionId');
     const sessionLogEl = document.getElementById('sessionLog');
+    const answerBox = document.getElementById('answerBox');
+    const referencesBox = document.getElementById('referencesBox');
 
     function log(msg, data) {
       const stamp = new Date().toISOString();
@@ -186,6 +188,15 @@
       return baseUrlEl.value.replace(/\/$/, '');
     }
 
+    async function api(path, opts = {}) {
+      const res = await fetch(`${getBase()}${path}`, opts);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`HTTP ${res.status}: ${text}`);
+      }
+      return res.json();
+    }
+
     function ensureSessionId() {
       if (!sessionEl.value) {
         sessionEl.value = crypto.randomUUID();
@@ -201,11 +212,10 @@
 
     async function pingHealth() {
       try {
-        const res = await fetch(`${getBase()}/health`);
-        const json = await res.json();
+        const json = await api('/health');
         log('Health', json);
       } catch (err) {
-        log('Health error', err);
+        log('Health error', err?.message || err);
       }
     }
 
@@ -213,11 +223,10 @@
       const sid = sessionEl.value || document.getElementById('sSession').value;
       if (!sid) return log('Session history', 'Provide a session ID');
       try {
-        const res = await fetch(`${getBase()}/sessions/${sid}`);
-        const json = await res.json();
+        const json = await api(`/sessions/${sid}`);
         sessionLogEl.textContent = JSON.stringify(json.data, null, 2);
         log('Session history loaded', json.data);
-      } catch (err) { log('Session history error', err); }
+      } catch (err) { log('Session history error', err?.message || err); }
     }
 
     async function createDoc() {
@@ -231,25 +240,23 @@
         try { payload.metadata = JSON.parse(metaText); } catch (e) { return log('Invalid metadata JSON', e); }
       }
       try {
-        const res = await fetch(`${getBase()}/documents`, {
+        const json = await api('/documents', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
-        const json = await res.json();
         log('Create doc', json);
         if (json.data && json.data._id) {
           document.getElementById('docId').value = json.data._id;
         }
-      } catch (err) { log('Create error', err); }
+      } catch (err) { log('Create error', err?.message || err); }
     }
 
     async function readDoc() {
       const id = document.getElementById('docId').value;
       if (!id) return log('Read error', 'Missing docId');
       try {
-        const res = await fetch(`${getBase()}/documents/${id}`);
-        const json = await res.json();
+        const json = await api(`/documents/${id}`);
         log('Read doc', json);
-      } catch (err) { log('Read error', err); }
+      } catch (err) { log('Read error', err?.message || err); }
     }
 
     async function updateDoc() {
@@ -261,22 +268,20 @@
         try { payload = JSON.parse(text); } catch (e) { return log('Invalid update JSON', e); }
       }
       try {
-        const res = await fetch(`${getBase()}/documents/${id}`, {
+        const json = await api(`/documents/${id}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
-        const json = await res.json();
         log('Update doc', json);
-      } catch (err) { log('Update error', err); }
+      } catch (err) { log('Update error', err?.message || err); }
     }
 
     async function deleteDoc() {
       const id = document.getElementById('docId').value;
       if (!id) return log('Delete error', 'Missing docId');
       try {
-        const res = await fetch(`${getBase()}/documents/${id}`, { method: 'DELETE' });
-        const json = await res.json();
+        const json = await api(`/documents/${id}`, { method: 'DELETE' });
         log('Delete doc', json);
-      } catch (err) { log('Delete error', err); }
+      } catch (err) { log('Delete error', err?.message || err); }
     }
 
     async function searchDocs() {
@@ -292,17 +297,16 @@
         try { payload.filters = JSON.parse(filtersText); } catch (e) { return log('Invalid filters JSON', e); }
       }
       try {
-        const res = await fetch(`${getBase()}/search`, {
+        const json = await api('/search', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
-        const json = await res.json();
         log('Search', json);
         sessionEl.value = sessionId;
         if (json.results && json.results.length) {
           loadSession();
         }
         renderSearch(json);
-      } catch (err) { log('Search error', err); }
+      } catch (err) { log('Search error', err?.message || err); }
     }
 
     function renderSearch(data) {
@@ -322,5 +326,3 @@
   </script>
 </body>
 </html>
-    const answerBox = document.getElementById('answerBox');
-    const referencesBox = document.getElementById('referencesBox');

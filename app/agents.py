@@ -17,6 +17,7 @@ from .db import (
     set_timestamps_for_update,
 )
 from .embeddings import embed_text
+from .llm import generate_answer
 
 settings = get_settings()
 
