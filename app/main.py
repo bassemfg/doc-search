@@ -9,6 +9,7 @@ from bson import json_util
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from datetime import datetime
+from uuid import uuid4
 
 from .agents import GRAPH
 from .config import get_settings
@@ -21,6 +22,7 @@ from .models import (
     SearchResponse,
 )
 from .monitoring import monitor
+from .db import get_sessions_collection
 
 settings = get_settings()
 
@@ -231,3 +233,14 @@ def delete_document(doc_id: str) -> CRUDResponse:
 @app.exception_handler(Exception)
 def handle_exception(request, exc: Exception):  # pragma: no cover - FastAPI handles
     return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+@app.get("/sessions/{session_id}", response_model=CRUDResponse)
+def get_session(session_id: str) -> CRUDResponse:
+    """Fetch stored interaction history for a session."""
+    col = get_sessions_collection()
+    doc = col.find_one({"session_id": session_id})
+    if not doc:
+        return CRUDResponse(success=True, data={"session_id": session_id, "interactions": []})
+    data = _bson_to_dict(doc)
+    return CRUDResponse(success=True, data=data)

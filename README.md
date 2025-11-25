@@ -95,6 +95,12 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
    uvicorn app.main:app --reload
    ```
 
+8. **Try the UI (local HTML)**
+   Open `ui/index.html` in your browser (or serve it locally: `python -m http.server -d ui 8001`). Configure the base URL (defaults to `http://localhost:8000`), then:
+   - Create, read, update, delete documents
+   - Run vector/hybrid searches (query + keyword/filters) and view the summary answer
+   - Health check
+
 ## API Surface
 
 - `POST /documents` – create
@@ -102,6 +108,7 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
 - `PUT /documents/{id}` – update (partial)
 - `DELETE /documents/{id}` – delete
 - `POST /search` – semantic search (vector + optional hybrid keyword/$match filters), returns top-N docs with metadata + score + summary (`answer`) and supports optional `session_id`
+- `GET /sessions/{session_id}` – fetch session interaction history (queries + result_ids)
 - `GET /health` – readiness probe
 
 Example search payload:
@@ -162,6 +169,8 @@ scripts/
   run_evals.py      # Offline evaluation harness
 tests/
   test_api.py       # CRUD + semantic search regression test
+ui/
+  index.html        # Lightweight UI to exercise search + CRUD endpoints
 ```
 
 ## Next Steps

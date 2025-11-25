@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Doc Search UI</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #111827;
+      --accent: #38bdf8;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --danger: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at 20% 20%, #1f2937, #0f172a 50%),
+        radial-gradient(circle at 80% 0%, #0b2539, #0f172a 60%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+    h1 { margin: 0 0 16px; font-weight: 700; letter-spacing: 0.5px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+    label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    input, textarea, button {
+      width: 100%;
+      margin-top: 6px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: #0b1220;
+      color: var(--text);
+      font-size: 14px;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    button {
+      cursor: pointer;
+      background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+      border: none;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(56, 189, 248, 0.35); }
+    .row { display: flex; gap: 8px; }
+    .row input, .row button { width: auto; flex: 1; }
+    .log {
+      background: #0b1220;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px;
+      white-space: pre-wrap;
+      font-family: "SFMono-Regular", Consolas, Menlo, monospace;
+      min-height: 180px;
+      overflow-y: auto;
+    }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: rgba(56, 189, 248, 0.15); color: var(--text); font-size: 12px; margin-right: 6px; }
+    .danger { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+  </style>
+</head>
+<body>
+  <header style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h1>Agentic Doc Search UI</h1>
+      <div class="pill">LangGraph flow: search + CRUD</div>
+      <div class="pill">Hybrid vector search</div>
+      <div class="pill">Answer agent</div>
+      <div class="pill">Session memory</div>
+    </div>
+    <div style="min-width:240px;">
+      <label>API Base URL</label>
+      <input id="baseUrl" value="http://localhost:8000" />
+      <button onclick="pingHealth()">Health Check</button>
+    </div>
+  </header>
+
+  <section class="card" style="margin-top:16px;">
+    <h3>Session & Memory</h3>
+    <div class="row">
+      <div style="flex:1;">
+        <label>Session ID</label>
+        <input id="sessionId" placeholder="auto-generated" />
+      </div>
+      <div style="width:160px;">
+        <button onclick="newSession()">New Session</button>
+      </div>
+      <div style="width:160px;">
+        <button onclick="loadSession()">Load History</button>
+      </div>
+    </div>
+    <div class="log" id="sessionLog" style="min-height:120px;">Session history will appear here…</div>
+  </section>
+
+  <main class="grid" style="margin-top:16px;">
+    <section class="card">
+      <h3>Create Document</h3>
+      <label>Title</label>
+      <input id="cTitle" placeholder="My movie note" />
+      <label>Content / Plot</label>
+      <textarea id="cContent" placeholder="Describe the document..." ></textarea>
+      <label>Tags (comma separated)</label>
+      <input id="cTags" placeholder="drama,vector" />
+      <label>Metadata (JSON)</label>
+      <textarea id="cMeta" placeholder='{"year": 2024, "genres": ["Drama"]}'></textarea>
+      <button onclick="createDoc()">Create</button>
+    </section>
+
+    <section class="card">
+      <h3>Read / Update / Delete</h3>
+      <label>Document ID</label>
+      <input id="docId" placeholder="ObjectId string" />
+      <div class="row">
+        <button onclick="readDoc()">Read</button>
+        <button onclick="deleteDoc()" class="danger">Delete</button>
+      </div>
+      <label>Update Payload (JSON)</label>
+      <textarea id="uPayload" placeholder='{"content": "New content", "tags": ["updated"]}'></textarea>
+      <button onclick="updateDoc()">Update</button>
+    </section>
+
+    <section class="card">
+      <h3>Search (Vector + Hybrid)</h3>
+      <label>Query</label>
+      <input id="sQuery" placeholder="underground fight club" />
+      <div class="row">
+        <div style="flex:1;">
+          <label>Top K</label>
+          <input id="sTopK" type="number" value="3" />
+        </div>
+        <div style="flex:1;">
+          <label>Session ID (auto if blank)</label>
+          <input id="sSession" placeholder="demo-123" />
+        </div>
+      </div>
+      <label>Keyword (regex match)</label>
+      <input id="sKeyword" placeholder="fight" />
+      <label>Filters (JSON $match)</label>
+      <textarea id="sFilters" placeholder='{"genres": "Drama"}'></textarea>
+      <button onclick="searchDocs()">Search</button>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
+      <h3>Activity Log</h3>
+      <div id="log" class="log">Responses will appear here…</div>
+    </section>
+  </main>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const baseUrlEl = document.getElementById('baseUrl');
+    const sessionEl = document.getElementById('sessionId');
+    const sessionLogEl = document.getElementById('sessionLog');
+
+    function log(msg, data) {
+      const stamp = new Date().toISOString();
+      let text = `[${stamp}] ${msg}`;
+      if (data !== undefined) {
+        try {
+          text += '\n' + JSON.stringify(data, null, 2);
+        } catch (e) {
+          text += '\n' + String(data);
+        }
+      }
+      logEl.textContent = text + '\n\n' + logEl.textContent;
+    }
+
+    function getBase() {
+      return baseUrlEl.value.replace(/\/$/, '');
+    }
+
+    function ensureSessionId() {
+      if (!sessionEl.value) {
+        sessionEl.value = crypto.randomUUID();
+      }
+      return sessionEl.value;
+    }
+
+    function newSession() {
+      sessionEl.value = crypto.randomUUID();
+      sessionLogEl.textContent = 'New session created: ' + sessionEl.value;
+      log('Session reset', sessionEl.value);
+    }
+
+    async function pingHealth() {
+      try {
+        const res = await fetch(`${getBase()}/health`);
+        const json = await res.json();
+        log('Health', json);
+      } catch (err) {
+        log('Health error', err);
+      }
+    }
+
+    async function loadSession() {
+      const sid = sessionEl.value || document.getElementById('sSession').value;
+      if (!sid) return log('Session history', 'Provide a session ID');
+      try {
+        const res = await fetch(`${getBase()}/sessions/${sid}`);
+        const json = await res.json();
+        sessionLogEl.textContent = JSON.stringify(json.data, null, 2);
+        log('Session history loaded', json.data);
+      } catch (err) { log('Session history error', err); }
+    }
+
+    async function createDoc() {
+      const payload = {
+        title: document.getElementById('cTitle').value,
+        content: document.getElementById('cContent').value,
+        tags: (document.getElementById('cTags').value || '').split(',').map(t => t.trim()).filter(Boolean),
+      };
+      const metaText = document.getElementById('cMeta').value;
+      if (metaText) {
+        try { payload.metadata = JSON.parse(metaText); } catch (e) { return log('Invalid metadata JSON', e); }
+      }
+      try {
+        const res = await fetch(`${getBase()}/documents`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        log('Create doc', json);
+        if (json.data && json.data._id) {
+          document.getElementById('docId').value = json.data._id;
+        }
+      } catch (err) { log('Create error', err); }
+    }
+
+    async function readDoc() {
+      const id = document.getElementById('docId').value;
+      if (!id) return log('Read error', 'Missing docId');
+      try {
+        const res = await fetch(`${getBase()}/documents/${id}`);
+        const json = await res.json();
+        log('Read doc', json);
+      } catch (err) { log('Read error', err); }
+    }
+
+    async function updateDoc() {
+      const id = document.getElementById('docId').value;
+      if (!id) return log('Update error', 'Missing docId');
+      let payload = {};
+      const text = document.getElementById('uPayload').value;
+      if (text) {
+        try { payload = JSON.parse(text); } catch (e) { return log('Invalid update JSON', e); }
+      }
+      try {
+        const res = await fetch(`${getBase()}/documents/${id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        log('Update doc', json);
+      } catch (err) { log('Update error', err); }
+    }
+
+    async function deleteDoc() {
+      const id = document.getElementById('docId').value;
+      if (!id) return log('Delete error', 'Missing docId');
+      try {
+        const res = await fetch(`${getBase()}/documents/${id}`, { method: 'DELETE' });
+        const json = await res.json();
+        log('Delete doc', json);
+      } catch (err) { log('Delete error', err); }
+    }
+
+    async function searchDocs() {
+      const sessionId = document.getElementById('sSession').value || ensureSessionId();
+      const payload = {
+        query: document.getElementById('sQuery').value,
+        top_k: Number(document.getElementById('sTopK').value || 3),
+        session_id: sessionId,
+        keyword: document.getElementById('sKeyword').value || undefined,
+      };
+      const filtersText = document.getElementById('sFilters').value;
+      if (filtersText) {
+        try { payload.filters = JSON.parse(filtersText); } catch (e) { return log('Invalid filters JSON', e); }
+      }
+      try {
+        const res = await fetch(`${getBase()}/search`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        log('Search', json);
+        sessionEl.value = sessionId;
+        if (json.results && json.results.length) {
+          loadSession();
+        }
+      } catch (err) { log('Search error', err); }
+    }
+  </script>
+</body>
+</html>
