@@ -153,25 +153,54 @@ def vector_search_agent(state: SearchState) -> SearchState:
         }
     )
 
-    docs = list(collection.aggregate(pipeline))
+    try:
+        docs = list(collection.aggregate(pipeline))
+    except Exception as exc:  # pragma: no cover
+        return {"error": f"Vector search failed: {exc}"}
     return {"results": docs}
 
 
-def answer_agent(state: SearchState) -> SearchState:
-    # Light-weight summariser that cites retrieved docs (titles) without making an external LLM call.
+def rerank_agent(state: SearchState) -> SearchState:
+    """Lightweight reranker that boosts keyword matches on top of vector scores."""
+
     docs = state.get("results", []) or []
+    keyword = (state.get("keyword") or "").lower()
+
+    def score(doc: Dict[str, Any]) -> float:
+        base = float(doc.get("score") or 0.0)
+        bonus = 0.0
+        if keyword:
+            blob = " ".join([
+                str(doc.get("title", "")),
+                str(doc.get("content", "")),
+                str(doc.get("plot", "")),
+            ]).lower()
+            if keyword in blob:
+                bonus += 0.1
+        return base + bonus
+
+    reranked = sorted(docs, key=score, reverse=True)
+    return {"results": reranked}
+
+
+def answer_agent(state: SearchState) -> SearchState:
+    # RAG answerer: call LLM (if available) with citations; fallback to extractive summary.
+    docs = state.get("results", []) or []
+    query = state.get("query", "")
     if not docs:
         return {"answer": "No documents found to answer this query."}
 
-    top_docs = docs[:3]
-    chunks = []
-    for doc in top_docs:
-        title = doc.get("title") or doc.get("metadata", {}).get("title", "(untitled)")
-        body = doc.get("content") or doc.get("plot") or ""
-        snippet = (body[:220] + "...") if len(body) > 220 else body
-        chunks.append(f"- {title}: {snippet}")
+    try:
+        answer = generate_answer(query, docs)
+    except Exception as exc:  # pragma: no cover
+        parts = []
+        for doc in docs[:3]:
+            title = doc.get("title") or doc.get("metadata", {}).get("title", "(untitled)")
+            body = doc.get("content") or doc.get("plot") or ""
+            snippet = (body[:220] + "...") if len(body) > 220 else body
+            parts.append(f"- {title}: {snippet}")
+        answer = "\n".join(parts) + f"\n(Note: LLM answer failed: {exc})"
 
-    answer = "Here is a brief answer based on the top documents:\n" + "\n".join(chunks)
     return {"answer": answer}
 
 
@@ -215,18 +244,24 @@ def crud_agent(state: SearchState) -> SearchState:
             "embedding": embedding,
         }
         set_timestamps_for_insert(to_insert)
-        res = collection.insert_one(to_insert)
-        doc = collection.find_one({"_id": res.inserted_id})
-        return {"crud_result": doc}
+        try:
+            res = collection.insert_one(to_insert)
+            doc = collection.find_one({"_id": res.inserted_id})
+            return {"crud_result": doc}
+        except Exception as exc:  # pragma: no cover
+            return {"error": f"Create failed: {exc}"}
 
     if op == "read":
         doc_id = state.get("doc_id")
         if not doc_id:
             return {"error": "doc_id is required"}
-        doc = collection.find_one({"_id": ObjectId(doc_id)})
-        if not doc:
-            return {"error": "Document not found"}
-        return {"crud_result": doc}
+        try:
+            doc = collection.find_one({"_id": ObjectId(doc_id)})
+            if not doc:
+                return {"error": "Document not found"}
+            return {"crud_result": doc}
+        except Exception as exc:  # pragma: no cover
+            return {"error": f"Read failed: {exc}"}
 
     if op == "update":
         doc_id = state.get("doc_id")
@@ -249,16 +284,22 @@ def crud_agent(state: SearchState) -> SearchState:
             return {"error": "No valid fields provided for update"}
         update_doc = {"$set": update_fields}
         set_timestamps_for_update(update_doc)
-        collection.update_one({"_id": ObjectId(doc_id)}, update_doc)
-        doc = collection.find_one({"_id": ObjectId(doc_id)})
-        return {"crud_result": doc}
+        try:
+            collection.update_one({"_id": ObjectId(doc_id)}, update_doc)
+            doc = collection.find_one({"_id": ObjectId(doc_id)})
+            return {"crud_result": doc}
+        except Exception as exc:  # pragma: no cover
+            return {"error": f"Update failed: {exc}"}
 
     if op == "delete":
         doc_id = state.get("doc_id")
         if not doc_id:
             return {"error": "doc_id is required"}
-        res = collection.delete_one({"_id": ObjectId(doc_id)})
-        return {"crud_result": {"deleted_count": res.deleted_count}}
+        try:
+            res = collection.delete_one({"_id": ObjectId(doc_id)})
+            return {"crud_result": {"deleted_count": res.deleted_count}}
+        except Exception as exc:  # pragma: no cover
+            return {"error": f"Delete failed: {exc}"}
 
     return {"error": f"Unsupported operation {op}"}
 
@@ -273,6 +314,7 @@ def build_graph():
     graph.add_node("session_memory", session_memory_agent)
     graph.add_node("embedding_agent", embedding_agent)
     graph.add_node("vector_search_agent", vector_search_agent)
+    graph.add_node("rerank_agent", rerank_agent)
     graph.add_node("answer_agent", answer_agent)
     graph.add_node("memory_write_agent", memory_write_agent)
     graph.add_node("crud_agent", crud_agent)
@@ -299,10 +341,11 @@ def build_graph():
         },
     )
 
-    # Search chain: load memory -> embed -> vector search -> summarise -> log session, then terminate.
+    # Search chain: load memory -> embed -> vector search -> rerank -> LLM answer -> log session, then terminate.
     graph.add_edge("session_memory", "embedding_agent")
     graph.add_edge("embedding_agent", "vector_search_agent")
-    graph.add_edge("vector_search_agent", "answer_agent")
+    graph.add_edge("vector_search_agent", "rerank_agent")
+    graph.add_edge("rerank_agent", "answer_agent")
     graph.add_edge("answer_agent", "memory_write_agent")
     graph.add_edge("memory_write_agent", END)
     # CRUD chain: go straight to CRUD agent and terminate.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from typing import List
 
 from .config import get_settings
@@ -45,5 +46,17 @@ def embed_text(text: str) -> List[float]:
     if settings.use_fake_embeddings:
         return _fake_embed(text)
 
-    response = _client.embeddings.create(model=settings.embedding_model_name, input=[text])
-    return response.data[0].embedding
+    def _call():
+        response = _client.embeddings.create(model=settings.embedding_model_name, input=[text])
+        return response.data[0].embedding
+
+    # simple retry/backoff
+    delay = 0.5
+    for _ in range(3):
+        try:
+            return _call()
+        except Exception as exc:  # pragma: no cover - network path
+            last_exc = exc
+            time.sleep(delay)
+            delay *= 2
+    raise RuntimeError(f"Failed to embed after retries: {last_exc}")

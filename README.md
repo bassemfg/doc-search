@@ -9,7 +9,8 @@ LangGraph-powered FastAPI service that ingests documents, embeds them, stores me
   - `session_memory_agent` reads/maintains conversations per session.
   - `embedding_agent` calls the embedding provider (OpenAI by default, deterministic fake embeddings for tests/dev).
   - `vector_search_agent` executes MongoDB Atlas `$vectorSearch` (with a cosine similarity fallback in mock mode) and supports hybrid filters (`keyword` regex + arbitrary `$match` filters).
-  - `answer_agent` builds a lightweight summary that cites retrieved docs.
+  - `rerank_agent` boosts keyword matches on top of vector scores.
+  - `answer_agent` calls an LLM for cited answers (fallback to extractive summary if LLM unavailable).
   - `memory_write_agent` persists interaction history for follow-up context.
   - `crud_agent` owns create/read/update/delete flows and keeps embeddings in sync.
 - **FastAPI surface** (`app/main.py`) is intentionally thin – each endpoint just builds the initial graph state and hands off to LangGraph.

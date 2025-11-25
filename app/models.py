@@ -47,6 +47,7 @@ class SearchResponse(BaseModel):
     query: str
     answer: Optional[str] = None
     results: List[DocumentOut]
+    references: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class CRUDResponse(BaseModel):

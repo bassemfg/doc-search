@@ -83,6 +83,28 @@ def _documents_from_results(docs: List[Dict[str, Any]]) -> List[DocumentOut]:
     return converted
 
 
+def _references_from_results(docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    refs: List[Dict[str, Any]] = []
+    for doc in docs:
+        _id = doc.get("_id")
+        if isinstance(_id, dict) and "$oid" in _id:
+            _id = _id["$oid"]
+        else:
+            try:
+                _id = str(_id)
+            except Exception:
+                pass
+        refs.append(
+            {
+                "id": _id,
+                "title": doc.get("title") or doc.get("metadata", {}).get("title"),
+                "score": doc.get("score"),
+                "source": doc.get("source"),
+            }
+        )
+    return refs
+
+
 @app.get("/health")
 def health() -> Dict[str, Any]:
     return {
@@ -103,7 +125,17 @@ def semantic_search(body: SearchRequest) -> SearchResponse:
         "keyword": body.keyword,
         "filters": body.filters,
     }
-    state = GRAPH.invoke(initial_state)
+    try:
+        state = GRAPH.invoke(initial_state)
+    except Exception as exc:
+        monitor.log_workflow_run(
+            operation="search",
+            inputs=initial_state,
+            outputs={"error": str(exc)},
+            success=False,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=500, detail="Search failed")
 
     if state.get("error"):
         monitor.log_workflow_run(
@@ -119,10 +151,12 @@ def semantic_search(body: SearchRequest) -> SearchResponse:
         _bson_to_dict(doc)
         for doc in state.get("results", [])
     ]
+    references = _references_from_results(docs)
     response = SearchResponse(
         query=body.query,
         answer=state.get("answer"),
         results=_documents_from_results(docs),
+        references=references,
     )
     monitor.log_workflow_run(
         operation="search",

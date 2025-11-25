@@ -152,6 +152,12 @@
     </section>
 
     <section class="card" style="grid-column: 1 / -1;">
+      <h3>Latest Search Results</h3>
+      <div id="answerBox" class="log" style="min-height:60px;">Answer will appear here…</div>
+      <div id="referencesBox" class="log" style="margin-top:8px; min-height:60px;">References will appear here…</div>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
       <h3>Activity Log</h3>
       <div id="log" class="log">Responses will appear here…</div>
     </section>
@@ -295,8 +301,26 @@
         if (json.results && json.results.length) {
           loadSession();
         }
+        renderSearch(json);
       } catch (err) { log('Search error', err); }
+    }
+
+    function renderSearch(data) {
+      answerBox.textContent = data.answer || 'No answer returned.';
+      const refs = data.references || [];
+      if (!refs.length) {
+        referencesBox.textContent = 'No references.';
+        return;
+      }
+      const lines = refs.map((r, idx) => {
+        const score = r.score !== undefined ? ` (score: ${r.score?.toFixed ? r.score.toFixed(3) : r.score})` : '';
+        const src = r.source ? ` [source: ${r.source}]` : '';
+        return `${idx + 1}. ${r.title || '(untitled)'} — id: ${r.id}${score}${src}`;
+      });
+      referencesBox.textContent = lines.join('\n');
     }
   </script>
 </body>
 </html>
+    const answerBox = document.getElementById('answerBox');
+    const referencesBox = document.getElementById('referencesBox');

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = Field(default="")
     embedding_model_name: str = Field(default="text-embedding-3-small")
+    llm_model_name: str = Field(default="gpt-4o-mini")
 
     default_top_k: int = Field(default=5)
     num_candidates: int = Field(default=50)
